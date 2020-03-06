@@ -1,0 +1,16 @@
+*.class
+*.jar
+*.swp
+.DS_Store
+.nrepl-port
+.lein-*
+dist/*
+target/*
+tmp/*
+tags
+pom.xml
+pom.xml.asc
+src/clojure/gen/projectconfig.clj
+.project
+.classpath
+org.eclipse.jdt.core.prefs

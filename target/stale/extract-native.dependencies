@@ -1,0 +1,1 @@
+([:dependencies ([cider/cider-nrepl "0.18.0"] [org.clojure/clojure "1.7.0"] [org.clojure/tools.nrepl "0.2.11"] [clojure-complete/clojure-complete "0.2.3" :exclusions ([org.clojure/clojure])] [slamhound/slamhound "1.5.5"] [com.h2database/h2 "1.4.197" :scope "test"])])

@@ -8,10 +8,11 @@
    function of one argument."
   false)
 
-;; This is mostly a bugfix for Microsofts sqljdbc4.jar JDBC driver (which
-;; sometimes creates new Boolean Objects) and Clojure has this inconsistence
-;; that "(if (new Boolean false) true)" returns true (see CLJ-1718).
-(defn- normalize [x]
+(defn normalize 
+  "This is mostly a bugfix for Microsofts sqljdbc4.jar JDBC driver (which
+   sometimes creates new Boolean Objects) and Clojure has this inconsistence
+   that `(if (new Boolean false) true) => true` (see CLJ-1718)."
+  [x]
   (if (= (type x) Boolean) (.booleanValue x) x))
 
 (defn generic-fill-prepared-statement
@@ -50,23 +51,30 @@
             (get-column-indexes rs-meta))))
 
 (defn rs->maps
-  "Iterates over the ResultSet rs and transforms each row into a
-   map, where the keys are the lowercase column labels as
-   keywords and the values being the values. The maps are
-   returned in order in a vector."
-  [^ResultSet rs]
-  (let [column-labels (get-column-labels rs)]
-    (letfn [(row-fn [^ResultSet rs] 
-              (reduce #(let[^String label %2]
-                         (assoc %1 
-; TODO I am very unhappy with the toLowerCase() call here. Maybe
-; we should add another keyword arg (e.g. `column-label-fn')
-; instead.
-                                (keyword (.toLowerCase label))
-                                (normalize (.getObject rs label))))
-                      {} 
-                      column-labels))]
-           (map-rs row-fn rs))))
+  "Iterates over the ResultSet `rs` and transforms each row into a map, where
+   the keys are the results of applying the column labels to `key-fn` and the
+   values being the values applied to `val-fn`. 
+
+   If no `key-fn` is provided, the column labels get transformed into
+   lower-case keywords. 
+
+   If no `val-fn` is provided, the values are applied to `normalize`.
+
+   The maps are returned in order in a vector."
+  ([^ResultSet rs]
+   (rs->maps rs #(keyword (.toLowerCase %))))
+  ([^ResultSet rs key-fn]
+   (rs->maps rs key-fn normalize))
+  ([^ResultSet rs key-fn val-fn]
+   (let [column-labels (get-column-labels rs)
+         row-fn (fn [^ResultSet rs] 
+                  (reduce #(let [^String label %2]
+                             (assoc %1 
+                                    (key-fn label)
+                                    (val-fn (.getObject rs label))))
+                          {} 
+                          column-labels))]
+     (map-rs row-fn rs))))
 
 (defn- close-quietly [^Connection con]
   (try (.close con)

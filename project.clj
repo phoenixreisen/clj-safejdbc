@@ -1,4 +1,4 @@
-(defproject clj-safejdbc "0.2.10"
+(defproject clj-safejdbc "0.2.11"
   :description "A fast library for accessing JDBC in Clojure"
   :url "https://github.com/phoenixreisen/clj-safejdbc"
   :license {:name "Eclipse Public License"

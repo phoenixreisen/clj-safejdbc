@@ -261,14 +261,30 @@
                                        bindings)]
                     ~@body)))))
 
-(defn execute [^Connection con f & args] 
+(defn exec [^Connection con f] 
+  "Ruft die FN `f` mit der uebergebenen Connection `con` auf und liefert das
+   Ergebnis des Aufrufs zurueck. 
+   
+   Die Connection `con` wird in jedem Fall geschlossen."
   (try 
-    ((apply f args) con)
+    (f con)
     (finally (.close con))))
+
+(defn execute [^Connection con f & args] 
+  "Ruft zuerst die FN `f` mit den uebergebenen Argumenten `args` auf, um als
+   Ergebnis dieses Aufrufs eine FN zu erhalten, die als einzigen
+   Uebergabeparameter eine `java.sql.Connection` erwartet. Diese FN wird dann
+   mit der Connection `con` aufgerufen und das Ergebnis des Aufrufs wird
+   zurueckgeliefert.
+   
+   Die Connection `con` wird in jedem Fall geschlossen.
+   
+   Examples:
+    (execute my-con query \"SELECT * FROM Person\")
+    (execute my-con query \"SELECT * FROM Person\" :rs-fn rs->vecs)"
+  (exec con (apply f args)))
 
 (defn sql-executer [con-fn]
   (fn [f & args]
     (let [con (con-fn)]
-      (try 
-        ((apply f args) con)
-        (finally (.close con))))))
+      (apply execute con f args))))

@@ -29,11 +29,11 @@
    each row of the ResultSet rs. Therefore f should accept a
    ResultSet as it's only argument."
   [f ^ResultSet rs]
-  (letfn [(map-rs* [f ^ResultSet rs accu] 
+  (letfn [(reduce-rs [f ^ResultSet rs accu] 
             (if (.next rs)
               (recur f rs (conj accu (f rs)))
               accu))]
-         (map-rs* f rs [])))
+         (reduce-rs f rs [])))
 
 (defn get-column-indexes 
   "Returns a seq containing all column indexes. The seq always
@@ -106,7 +106,15 @@
    and evaluates the functions in order.  The transactional
    connection is passed to each of the functions - therefore each
    fn must accept exactly one argument (the connection).  The
-   result of the last fn gets returned."
+   result of the last fn gets returned.
+   
+   Ex.
+
+   (apply-to-tx connection 
+     (update! [\"INSERT INTO Person (firstname, lastname) VALUES (?, ?)\"
+               \"Johanna\" \"Hermanns\"])
+     (update! [\"INSERT INTO Person (firstname, lastname) VALUES (?, ?)\"
+               \"Frederick\" \"Hermanns\"]))"
   [^Connection con f & fs]
   (letfn [(apply-to-tx* [tx g & gs]
                  (let [result (g tx)]
@@ -132,16 +140,20 @@
    rows.
    Examples:
    (update! \"INSERT INTO Customers (Name, Age) VALUES ('Jan', 37)\")"
-  [sql & {:keys [fill-fn] :or {fill-fn generic-fill-prepared-statement}}]
-  (if *log* (*log* sql))
+  [sql & {:keys [fill-fn query-timeout] 
+          :or {fill-fn generic-fill-prepared-statement
+               query-timeout 0}}]
+  (when *log* (*log* sql)) 
   (if (string? sql)
     (fn [^Connection con]
-      (with-open [^Statement stmt (.createStatement con)]
+      (with-open [^Statement stmt (doto (.createStatement con)
+                                    (.setQueryTimeout query-timeout))]
         (.executeUpdate stmt sql)))
     (let [sql-str (first sql)
           data (rest sql)]
       (fn [^Connection con]
-        (with-open [^PreparedStatement pstmt (.prepareStatement con sql-str)]
+        (with-open [^PreparedStatement pstmt (doto (.prepareStatement con sql-str)
+                                               (.setQueryTimeout query-timeout))]
           (fill-fn pstmt data)
           (.executeUpdate pstmt))))))
 
@@ -153,15 +165,18 @@
    rs-fn.
    Examples:
    (insert \"INSERT INTO Customers (Name, Age) VALUES ('Jan', 37)\")"
-  [sql & {:keys [rs-fn fill-fn] :or {rs-fn   get-pk 
-                                     fill-fn generic-fill-prepared-statement}}]
-  (if *log* (*log* sql))
+  [sql & {:keys [rs-fn fill-fn query-timeout] 
+          :or {rs-fn get-pk 
+               fill-fn generic-fill-prepared-statement
+               query-timeout 0}}]
+  (when *log* (*log* sql)) 
   (if (string? sql)
     (fn [^Connection con]
       (with-open [^PreparedStatement pstmt 
-                  (.prepareStatement con 
-                                     ^String sql 
-                                     Statement/RETURN_GENERATED_KEYS)]
+                  (doto (.prepareStatement con 
+                                           ^String sql 
+                                           Statement/RETURN_GENERATED_KEYS)
+                    (.setQueryTimeout query-timeout))]
         (.executeUpdate pstmt)
         (with-open [^ResultSet rs (.getGeneratedKeys pstmt)]
           (rs-fn rs))))
@@ -169,9 +184,10 @@
           data (rest sql)]
       (fn [^Connection con]
         (with-open [^PreparedStatement pstmt 
-                    (.prepareStatement con 
-                                       ^String sql-str 
-                                       Statement/RETURN_GENERATED_KEYS)]
+                    (doto (.prepareStatement con 
+                                             ^String sql-str 
+                                             Statement/RETURN_GENERATED_KEYS)
+                      (.setQueryTimeout query-timeout))]
           (fill-fn pstmt data)
           (.executeUpdate pstmt)
           (with-open [^ResultSet rs (.getGeneratedKeys pstmt)]
@@ -182,12 +198,15 @@
    sql stored procedure and returns the number of altered rows.
    Examples:
    (call! [\"{call mystoredproc(?, ?)}\" 123 456])"
-  [sql & {:keys [fill-fn] :or {fill-fn generic-fill-prepared-statement}}]
-  (if *log* (*log* sql))
+  [sql & {:keys [fill-fn query-timeout] 
+          :or {fill-fn generic-fill-prepared-statement 
+               query-timeout 0}}]
+  (when *log* (*log* sql)) 
   (let [sql-str (first sql)
         data (rest sql)]
     (fn [^Connection con]
-      (with-open [^PreparedStatement pstmt (.prepareCall con sql-str)]
+      (with-open [^PreparedStatement pstmt (doto (.prepareCall con sql-str)
+                                             (.setQueryTimeout query-timeout))]
         (fill-fn pstmt data)
         (.executeUpdate pstmt)))))
 
@@ -197,14 +216,16 @@
    rs-fn.  The result of the rs-fn is then returned.
    Examples:
    (call [\"{call mystoredproc(?, ?)}\" 123 456])"
-  [sql & {:keys [rs-fn fill-fn] 
-          :or {rs-fn   rs->maps
-               fill-fn generic-fill-prepared-statement}}]
-  (if *log* (*log* sql))
+  [sql & {:keys [rs-fn fill-fn query-timeout] 
+          :or {rs-fn rs->maps
+               fill-fn generic-fill-prepared-statement
+               query-timeout 0}}]
+  (when *log* (*log* sql)) 
   (let [sql-str (first sql)
         data (rest sql)]
     (fn [^Connection con]
-      (with-open [^PreparedStatement pstmt (.prepareCall con sql-str)]
+      (with-open [^PreparedStatement pstmt (doto (.prepareCall con sql-str)
+                                             (.setQueryTimeout query-timeout))]
         (fill-fn pstmt data)
         (with-open [^ResultSet rs (.executeQuery pstmt)]
           (rs-fn rs))))))
@@ -216,19 +237,22 @@
    Examples:
    (query \"SELECT * FROM Customers\")
    (query [\"SELECT * FROM Customers WHERE Age=?\" 21])"
-  [sql & {:keys [rs-fn fill-fn] 
-          :or {rs-fn   rs->maps
-               fill-fn generic-fill-prepared-statement}}]
-  (if *log* (*log* sql))
+  [sql & {:keys [rs-fn fill-fn query-timeout] 
+          :or {rs-fn rs->maps
+               fill-fn generic-fill-prepared-statement
+               query-timeout 0}}]
+  (when *log* (*log* sql)) 
   (if (string? sql)
     (fn [^Connection con]
-      (with-open [^Statement stmt (.createStatement con)
-                  ^ResultSet rs   (.executeQuery stmt sql)]
+      (with-open [^Statement stmt (doto (.createStatement con)
+                                    (.setQueryTimeout query-timeout))
+                  ^ResultSet rs (.executeQuery stmt sql)]
         (rs-fn rs)))
     (let [sql-str (first sql)
           data (rest sql)]
       (fn [^Connection con]
-        (with-open [^PreparedStatement pstmt (.prepareStatement con sql-str)]
+        (with-open [^PreparedStatement pstmt (doto (.prepareStatement con sql-str)
+                                               (.setQueryTimeout query-timeout))]
           (fill-fn pstmt data)
           (with-open [^ResultSet rs (.executeQuery pstmt)]
             (rs-fn rs)))))))
@@ -239,9 +263,12 @@
    Examples:
    (query-first \"SELECT * FROM Customers WHERE Id=42\")
    (query-first [\"SELECT * FROM Customers WHERE Name=? AND Age=?\" \"Jan\" 37])"
-  [sql & {:keys [rs-fn fill-fn] :or {rs-fn   rs->maps
-                                     fill-fn generic-fill-prepared-statement}}]
-  (comp first (query sql :rs-fn rs-fn :fill-fn fill-fn)))
+  [sql & {:keys [rs-fn fill-fn query-timeout] 
+          :or {rs-fn rs->maps
+               fill-fn generic-fill-prepared-statement
+               query-timeout 0}}]
+  (comp first (query sql 
+                :rs-fn rs-fn :fill-fn fill-fn :query-timeout query-timeout)))
 
 (defn query-single-value
   "Returns a fn that (when called with a Connection) executes the
@@ -250,8 +277,13 @@
    (query-single-value \"SELECT count(*) FROM Customers\")
    (query-single-value [\"SELECT count(*) FROM Customers WHERE Name=?\" 
                        \"Jan\"])"
-  [sql & {:keys [fill-fn] :or {fill-fn generic-fill-prepared-statement}}]
-  (comp ffirst #(let [f (query sql :rs-fn rs->vecs :fill-fn fill-fn)]
+  [sql & {:keys [fill-fn query-timeout] 
+          :or {fill-fn generic-fill-prepared-statement
+               query-timeout 0}}]
+  (comp ffirst #(let [f (query sql 
+                          :rs-fn rs->vecs 
+                          :fill-fn fill-fn 
+                          :query-timeout query-timeout)]
                   (f %))))
 
 (defmacro dotx [con bindings & body]

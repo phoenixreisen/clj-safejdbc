@@ -101,6 +101,15 @@
    primary keys."
   (comp ffirst rs->vecs))
 
+(def get-long-pk
+  "This rs-fn is especially useful in conjunction with the
+   insert! fn, to retrieve the values of automatically generated
+   primary keys.
+
+   In contrast to `get-pk` this FN always returns values of type 
+   long."
+  (comp first (partial map-rs #(.getLong % 1))))
+
 (defn apply-to-tx
   "Establishes a transactional context upon the Connection con
    and evaluates the functions in order.  The transactional
@@ -166,8 +175,8 @@
    Examples:
    (insert \"INSERT INTO Customers (Name, Age) VALUES ('Jan', 37)\")"
   [sql & {:keys [rs-fn fill-fn query-timeout] 
-          :or {rs-fn get-pk 
-               fill-fn generic-fill-prepared-statement
+          :or {rs-fn         get-long-pk
+               fill-fn       generic-fill-prepared-statement
                query-timeout 0}}]
   (when *log* (*log* sql)) 
   (if (string? sql)

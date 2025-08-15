@@ -37,6 +37,14 @@
   "create table Person(id int, firstname varchar(255), lastname varchar(255),
    birthdate timestamp)")
 ;-------------------------------------------------------------------------------
+(deftest get-lonk-pk-test2
+  (let [uuid  (uuid)
+        con   (get-connection uuid)
+        _     (execute con update! 
+                "create table Person(id int auto_increment, name varchar(255))")
+        id    (execute (get-connection uuid) insert! "insert into Person (name) values ('Nadine')")]
+    (is (int? id))))
+;-------------------------------------------------------------------------------
 (deftest execute-test 
   (let [uuid (uuid)
         con (get-connection uuid)
